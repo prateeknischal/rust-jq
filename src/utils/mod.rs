@@ -36,10 +36,10 @@ fn _traverse(v: &String, path: &String) -> Result<Vec<json::Value>, bool> {
         .filter(|x: &&str| x.len() != 0)
         .collect();
 
-    let mut res: Vec<json::Value> = vec![val.clone()];
+    let mut res: Vec<json::Value> = vec![val];
     let mut t: result::Result<Vec<json::Value>, bool>;
     for p in paths {
-        t = _parse_key(&res, &String::from(p));
+        t = _parse_key(&mut res, &String::from(p));
 
         if t.is_err() {
             return Err(false);
@@ -52,7 +52,7 @@ fn _traverse(v: &String, path: &String) -> Result<Vec<json::Value>, bool> {
 }
 
 /// The parsing logic for Array and Non-Array object.
-fn _parse_key(objs: &Vec<json::Value>, key: &String) -> Result<Vec<json::Value>, bool> {
+fn _parse_key(objs: &mut Vec<json::Value>, key: &String) -> Result<Vec<json::Value>, bool> {
     let mut res = Vec::<json::Value>::new();
 
     // Determine if the key is of array type. eg: .a[] or .a[3]
@@ -64,29 +64,31 @@ fn _parse_key(objs: &Vec<json::Value>, key: &String) -> Result<Vec<json::Value>,
             return Err(false);
         }
         let arr_name = &key[..start];
-        for v in objs {
-            let obj = v.as_object();
+        for mut v in objs.drain(0..) {
+            let obj = v.as_object_mut();
 
             if obj.is_none() {
                 continue;
             }
 
-            let arr = obj.unwrap().get(arr_name);
+            let arr = obj.unwrap().get_mut(arr_name);
             if arr.is_none() {
                 return Err(false);
             }
 
-            let ex = arr.unwrap().as_array().unwrap();
+            let ex = arr.unwrap().as_array_mut().unwrap();
             if start + 1 == end {
                 // If the key does not have an index then return all the
                 // objects in that array as a vector.
-                ex.iter().for_each(|x| res.push(x.clone()));
+                ex.drain(0..).for_each(|x| res.push(x));
             } else {
                 // If the key has an index, then fetch only that object.
                 let idx = key[start + 1..end].parse::<usize>().unwrap();
                 if idx >= ex.len() {
                     continue;
                 }
+                // Clone should be cheaper than remove and shift.
+                // res.push(ex.remove(idx));
                 res.push(ex[idx].clone());
             }
         }
